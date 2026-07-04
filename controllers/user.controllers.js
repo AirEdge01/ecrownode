@@ -126,7 +126,7 @@ const sendAdminWelcomeEmail = (email, firstName, lastName) => {
                                     <table cellspacing="0" cellpadding="0" style="margin: 28px 0;">
                                         <tr>
                                             <td bgcolor="#eab308" style="border-radius: 8px; text-align: center;">
-                                                <a href="http://localhost:5173/admin/dashboard" target="_blank" style="display: inline-block; padding: 14px 32px; color: #000000; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: 0.5px;">
+                                                <a href="https://e-crown-8duf.vercel.app//admin/dashboard" target="_blank" style="display: inline-block; padding: 14px 32px; color: #000000; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: 0.5px;">
                                                     Launch Command Dashboard
                                                 </a>
                                             </td>

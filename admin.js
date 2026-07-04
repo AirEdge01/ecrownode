@@ -22,8 +22,8 @@ const handleCreateProduct = async (e) => {
 
     // Prioritize the matching endpoint that responded with the 500 processing hook
     const uploadRoutes = [
-        'http://localhost:2000/api/admin/products',
-        'http://localhost:2000/api/products'
+        'https://ecrownode.onrender.com/api/admin/products',
+        'https://ecrownode.onrender.com/api/products'
     ];
 
     let uploadSuccess = false;
