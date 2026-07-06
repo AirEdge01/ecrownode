@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
+
+// 🔥 FIX 1: Run configuration BEFORE reading process.env values
 dotenv.config();
 
 const app = express();
@@ -52,16 +54,30 @@ const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 // ==========================================
 // 2. NODEMAILER EMAIL CONFIGURATION
 // ==========================================
+// 🔥 FIX 2: Upgraded with strict SSL/TLS parameters and connection pooling
 const transporter = nodemailer.createTransport({
   service: 'gmail', 
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  pool: true,
   auth: {
-    user: process.env.ADMIN_EMAIL,
-    pass: process.env.ADMIN_EMAIL_PASSWORD 
+    user: process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com',
+    pass: process.env.ADMIN_EMAIL_PASSWORD || 'zuegcnabukvzyziz' 
+  }
+});
+
+// Auto-Verify Connection Handling Engine on Bootstrap
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ index.js Mail Configuration Error:", error.message);
+  } else {
+    console.log("🚀 index.js Order Mail System authenticated cleanly.");
   }
 });
 
 const sendAdminOrderAlert = async (orderData) => {
-  const adminEmail = process.env.ADMIN_EMAIL || 'your-admin-email@gmail.com';
+  const adminEmail = process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com';
   
   const itemsListHTML = orderData.items.map(item => 
     `<li><strong>${item.name}</strong> (Qty: ${item.quantity}) - ₦${item.price.toLocaleString()}</li>`
@@ -100,8 +116,6 @@ const sendAdminOrderAlert = async (orderData) => {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// FIXED: Cleaned origins array, added required protocols (https://), 
-// and re-added local testing fallbacks so you can test smoothly in both environments.
 app.use(cors({
     origin: [
       'https://e-crown-8duf.vercel.app',
@@ -211,7 +225,6 @@ app.post('/api/orders', async (req, res) => {
           price: Number(product.price) 
         });
       } else {
-        // Fallback for hardcoded mock elements
         formattedItems.push({
           productId: String(targetId),
           name: item.name || 'Unknown Hardware Item',
@@ -232,7 +245,6 @@ app.post('/api/orders', async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // Only deduct stock counts for real database items
     for (const item of formattedItems) {
       if (mongoose.Types.ObjectId.isValid(item.productId)) {
         const existingProduct = await Product.findById(item.productId);
