@@ -9,16 +9,29 @@ const User = require('../models/user.models');
 // Dedicated Mail Configuration Engine
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use SSL/TLS
     auth: {
         user: process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com',
-        pass: process.env.ADMIN_EMAIL_PASSWORD || 'zuegcnabukvzyziz'
+        // CRITICAL: This MUST be a 16-character Google App Password, NOT your standard password
+        pass: process.env.ADMIN_EMAIL_PASSWORD || 'zuegcnabukvzyziz' 
+    }
+});
+
+// Verify connection configuration on startup
+transporter.verify((error, success) => {
+    if (error) {
+        console.error("❌ Mail Server Connection Error:", error.message);
+    } else {
+        console.log("🚀 Mail Server is configured and ready to dispatch messages");
     }
 });
 
 // ==========================================
 // 1. STANDARD USER WELCOME EMAIL TEMPLATE
 // ==========================================
-const sendUserWelcomeEmail = (email, firstName, lastName) => {
+const sendUserWelcomeEmail = async (email, firstName, lastName) => {
     const mailOptions = {
         from: `"eCrown Tech" <${process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com'}>`,
         to: email,
@@ -65,16 +78,20 @@ const sendUserWelcomeEmail = (email, firstName, lastName) => {
         </html>`
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) console.error("❌ User Welcome Email Failed:", error.message);
-        else console.log("✉️ Standard User Welcome Email sent successfully:", info.response);
-    });
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("✉️ Standard User Welcome Email sent successfully:", info.response);
+        return info;
+    } catch (error) {
+        console.error("❌ User Welcome Email Failed:", error.message);
+        throw error;
+    }
 };
 
 // ==========================================
-// 2. EXCLUSIVE ADMIN WELCOME EMAIL TEMPLATE (DIFFERENT DESIGN)
+// 2. EXCLUSIVE ADMIN WELCOME EMAIL TEMPLATE
 // ==========================================
-const sendAdminWelcomeEmail = (email, firstName, lastName) => {
+const sendAdminWelcomeEmail = async (email, firstName, lastName) => {
     const mailOptions = {
         from: `"eCrown Admin Network" <${process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com'}>`,
         to: email,
@@ -94,7 +111,6 @@ const sendAdminWelcomeEmail = (email, firstName, lastName) => {
                 <tr>
                     <td align="center">
                         <table class="wrapper" width="550" cellspacing="0" cellpadding="0" style="background-color: #1c1917; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #2e2a24;">
-                            
                             <tr>
                                 <td bgcolor="#3b0764" style="padding: 40px; text-align: center; border-bottom: 4px solid #eab308;">
                                     <h2 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: 1px;">
@@ -102,27 +118,22 @@ const sendAdminWelcomeEmail = (email, firstName, lastName) => {
                                     </h2>
                                 </td>
                             </tr>
-
                             <tr>
                                 <td style="padding: 40px 45px;">
                                     <h1 style="margin: 0 0 20px 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">
                                         Admin Console Access Initialized 🛠️
                                     </h1>
-                                    
                                     <p style="margin: 0 0 16px 0; color: #e7e5e4; font-size: 16px; font-weight: 600;">
                                         Attention: Administrator ${lastName},
                                     </p>
-                                    
                                     <p style="margin: 0 0 24px 0; color: #a8a29e; font-size: 15px; line-height: 1.6;">
                                         An administrative credential profile matching your name (<strong>${firstName} ${lastName}</strong>) has been elevated to management tier parameters on our cluster network. 
                                     </p>
-
                                     <div style="background-color: #450a0a; border-left: 4px solid #ef4444; padding: 16px; margin: 25px 0; border-radius: 6px;">
                                         <p style="margin: 0; color: #fca5a5; font-size: 13px; font-weight: 500; line-height: 1.5;">
                                             <strong>SECURITY MANDATE:</strong> This account holds core data clearance keys, payment manifest maps, and directory controls. Do not share terminal screen operations or credential keys with unauthorized nodes.
                                         </p>
                                     </div>
-
                                     <table cellspacing="0" cellpadding="0" style="margin: 28px 0;">
                                         <tr>
                                             <td bgcolor="#eab308" style="border-radius: 8px; text-align: center;">
@@ -132,9 +143,7 @@ const sendAdminWelcomeEmail = (email, firstName, lastName) => {
                                             </td>
                                         </tr>
                                     </table>
-
                                     <hr style="border: none; border-top: 1px solid #2e2a24; margin: 30px 0;">
-
                                     <table width="100%" cellspacing="0" cellpadding="0">
                                         <tr>
                                             <td>
@@ -153,16 +162,20 @@ const sendAdminWelcomeEmail = (email, firstName, lastName) => {
         </html>`
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) console.error("❌ Admin Welcome Email Failed:", error.message);
-        else console.log("✉️ Exclusive Admin Welcome Email sent cleanly:", info.response);
-    });
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("✉️ Exclusive Admin Welcome Email sent cleanly:", info.response);
+        return info;
+    } catch (error) {
+        console.error("❌ Admin Welcome Email Failed:", error.message);
+        throw error;
+    }
 };
 
 // ==========================================
 // 3. SIGN-IN NOTIFICATION EMAIL TEMPLATE
 // ==========================================
-const sendSigninNotificationEmail = (email, firstName, lastName, role = 'user') => {
+const sendSigninNotificationEmail = async (email, firstName, lastName, role = 'user') => {
     const isAdmin = role.toLowerCase() === 'admin';
     const mailOptions = {
         from: `"eCrown System" <${process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com'}>`,
@@ -178,10 +191,14 @@ const sendSigninNotificationEmail = (email, firstName, lastName, role = 'user') 
         </div>`
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) console.error("❌ Sign-In Alert Dispatch Failed:", error.message);
-        else console.log("✉️ Sign-in alert email dispatched successfully.");
-    });
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("✉️ Sign-in alert email dispatched successfully:", info.response);
+        return info;
+    } catch (error) {
+        console.error("❌ Sign-In Alert Dispatch Failed:", error.message);
+        throw error;
+    }
 };
 
 // ==========================================
@@ -203,8 +220,6 @@ const postSignUp = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(String(password), saltRounds);
-        
-        // Auto-assign lowercased role, defaulting to standard user tier
         const assignedRole = (role && role.toLowerCase() === 'admin') ? 'admin' : 'user';
 
         const newUser = new User({
@@ -218,11 +233,16 @@ const postSignUp = async (req, res) => {
         const savedUser = await newUser.save();
         console.log(`[Success] Account written to database with clearance: ${savedUser.role}`);
 
-        // DYNAMIC SHIFT: Fire completely unique designs based on account role
-        if (savedUser.role === 'admin') {
-            sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-        } else {
-            sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
+        // Await email delivery completion to guarantee transmission before responding
+        try {
+            if (savedUser.role === 'admin') {
+                await sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
+            } else {
+                await sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
+            }
+        } catch (mailErr) {
+            console.error("⚠️ User registered, but system failed to send Welcome Email:", mailErr.message);
+            // We proceed with registration success even if email failed, or adjust based on your requirement
         }
 
         return res.status(201).json({ success: true, message: 'User registered successfully' });
@@ -258,8 +278,12 @@ const postSignIn = async (req, res) => {
             { expiresIn: '1h' }
         );
         
-        // Dynamic Sign-In alert system
-        sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
+        // Await confirmation email processing
+        try {
+            await sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
+        } catch (mailErr) {
+            console.error("⚠️ User signed in, but system failed to send sign-in alert email:", mailErr.message);
+        }
 
         return res.status(200).json({ success: true, message: 'User logged in successfully', token });
 
@@ -269,7 +293,6 @@ const postSignIn = async (req, res) => {
     }
 };
 
-// Single clean unified point of exports configuration mapping
 module.exports = { 
     postSignUp, 
     getSignUp, 
