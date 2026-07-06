@@ -100,9 +100,15 @@ const sendAdminOrderAlert = async (orderData) => {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// FIXED: Included HTTP variations to match your React frontend server context
 app.use(cors({
-    origin: ['https://e-crown-8duf.vercel.app/', 'https://e-crown-8duf.vercel.app/'], // Added standard React port fallback
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    origin: [
+      'e-crown-8duf.vercel.app', 
+      'e-crown-8duf.vercel.app', 
+      'e-crown-8duf.vercel.app', 
+      'e-crown-8duf.vercel.app'
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true
 }));
 
@@ -290,3 +296,4 @@ mongoose.connect(MongoDB_URI)
     });
   })
   .catch((err) => console.error("Mongoose Fatal Error:", err.message));
+  

@@ -22,8 +22,8 @@ const handleCreateProduct = async (e) => {
 
     // Prioritize the matching endpoint that responded with the 500 processing hook
     const uploadRoutes = [
-        'https://ecrownode.onrender.com/api/admin/products',
-        'https://ecrownode.onrender.com/api/products'
+        'e-crown-8duf.vercel.app/api/admin/products',
+        'e-crown-8duf.vercel.app/api/products'
     ];
 
     let uploadSuccess = false;
