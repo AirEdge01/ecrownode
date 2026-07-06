@@ -100,15 +100,18 @@ const sendAdminOrderAlert = async (orderData) => {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// FIXED: Included HTTP variations to match your React frontend server context
+// FIXED: Cleaned origins array, added required protocols (https://), 
+// and re-added local testing fallbacks so you can test smoothly in both environments.
 app.use(cors({
     origin: [
-      'e-crown-8duf.vercel.app', 
-      'e-crown-8duf.vercel.app', 
-      'e-crown-8duf.vercel.app', 
-      'e-crown-8duf.vercel.app'
+      'https://e-crown-8duf.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
 
@@ -296,4 +299,3 @@ mongoose.connect(MongoDB_URI)
     });
   })
   .catch((err) => console.error("Mongoose Fatal Error:", err.message));
-  
