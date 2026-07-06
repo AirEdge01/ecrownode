@@ -11,20 +11,21 @@ const transporter = nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
     port: 465,
-    secure: true, // Use SSL/TLS
+    secure: true, // Upgrades connection to SSL/TLS automatically
+    pool: true,   // Keeps connections open so sending emails doesn't lag the server
     auth: {
         user: process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com',
-        // CRITICAL: This MUST be a 16-character Google App Password, NOT your standard password
+        // CRITICAL: This MUST be a 16-character Google App Password (e.g., "abcd efgh ijkl mnop")
         pass: process.env.ADMIN_EMAIL_PASSWORD || 'zuegcnabukvzyziz' 
     }
 });
 
-// Verify connection configuration on startup
+// Auto-Verify SMTP Handshake on Startup
 transporter.verify((error, success) => {
     if (error) {
-        console.error("❌ Mail Server Connection Error:", error.message);
+        console.error("❌ CRITICAL: Mail Server configuration is broken:", error.message);
     } else {
-        console.log("🚀 Mail Server is configured and ready to dispatch messages");
+        console.log("🚀 SUCCESS: Mail Server connected and authenticated cleanly!");
     }
 });
 
@@ -78,14 +79,7 @@ const sendUserWelcomeEmail = async (email, firstName, lastName) => {
         </html>`
     };
 
-    try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log("✉️ Standard User Welcome Email sent successfully:", info.response);
-        return info;
-    } catch (error) {
-        console.error("❌ User Welcome Email Failed:", error.message);
-        throw error;
-    }
+    return transporter.sendMail(mailOptions);
 };
 
 // ==========================================
@@ -162,14 +156,7 @@ const sendAdminWelcomeEmail = async (email, firstName, lastName) => {
         </html>`
     };
 
-    try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log("✉️ Exclusive Admin Welcome Email sent cleanly:", info.response);
-        return info;
-    } catch (error) {
-        console.error("❌ Admin Welcome Email Failed:", error.message);
-        throw error;
-    }
+    return transporter.sendMail(mailOptions);
 };
 
 // ==========================================
@@ -191,14 +178,7 @@ const sendSigninNotificationEmail = async (email, firstName, lastName, role = 'u
         </div>`
     };
 
-    try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log("✉️ Sign-in alert email dispatched successfully:", info.response);
-        return info;
-    } catch (error) {
-        console.error("❌ Sign-In Alert Dispatch Failed:", error.message);
-        throw error;
-    }
+    return transporter.sendMail(mailOptions);
 };
 
 // ==========================================
@@ -233,18 +213,18 @@ const postSignUp = async (req, res) => {
         const savedUser = await newUser.save();
         console.log(`[Success] Account written to database with clearance: ${savedUser.role}`);
 
-        // Await email delivery completion to guarantee transmission before responding
-        try {
-            if (savedUser.role === 'admin') {
-                await sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-            } else {
-                await sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-            }
-        } catch (mailErr) {
-            console.error("⚠️ User registered, but system failed to send Welcome Email:", mailErr.message);
-            // We proceed with registration success even if email failed, or adjust based on your requirement
+        // Fast Async background transmission process
+        if (savedUser.role === 'admin') {
+            sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName)
+                .then(info => console.log("✉️ Background Admin Email Sent:", info.response))
+                .catch(err => console.error("❌ Background Admin Email Failure Trace:", err.message));
+        } else {
+            sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName)
+                .then(info => console.log("✉️ Background User Email Sent:", info.response))
+                .catch(err => console.error("❌ Background User Email Failure Trace:", err.message));
         }
 
+        // Returns status 201 immediately so loading speeds remain fast
         return res.status(201).json({ success: true, message: 'User registered successfully' });
 
     } catch (err) {
@@ -278,12 +258,10 @@ const postSignIn = async (req, res) => {
             { expiresIn: '1h' }
         );
         
-        // Await confirmation email processing
-        try {
-            await sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
-        } catch (mailErr) {
-            console.error("⚠️ User signed in, but system failed to send sign-in alert email:", mailErr.message);
-        }
+        // Fast Async background sign-in notification process
+        sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user')
+            .then(info => console.log("✉️ Background Sign-In Alert Sent:", info.response))
+            .catch(err => console.error("❌ Background Sign-In Email Failure Trace:", err.message));
 
         return res.status(200).json({ success: true, message: 'User logged in successfully', token });
 
