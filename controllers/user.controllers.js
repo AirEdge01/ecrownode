@@ -50,7 +50,7 @@ const sendUserWelcomeEmail = (email, firstName, lastName) => {
                                     <p style="color: #475569; font-size: 15px; line-height: 1.6;">Thank you for signing up for our application. We are absolutely thrilled to have you on board with eCrown Tech! Your secure profile has been successfully generated.</p>
                                     <table cellspacing="0" cellpadding="0" style="margin: 28px 0;">
                                         <tr>
-                                            <td bgcolor="#0F172A" style="border-radius: 8px;"><a href="http://localhost:5173/dashboard" target="_blank" style="display: inline-block; padding: 14px 28px; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none;">Go to Dashboard</a></td>
+                                            <td bgcolor="#0F172A" style="border-radius: 8px;"><a href="https://e-crown-8duf.vercel.app/dashboard" target="_blank" style="display: inline-block; padding: 14px 28px; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none;">Go to Dashboard</a></td>
                                         </tr>
                                     </table>
                                     <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 25px 0;">
@@ -126,7 +126,7 @@ const sendAdminWelcomeEmail = (email, firstName, lastName) => {
                                     <table cellspacing="0" cellpadding="0" style="margin: 28px 0;">
                                         <tr>
                                             <td bgcolor="#eab308" style="border-radius: 8px; text-align: center;">
-                                                <a href="https://localhost:5174/admin/dashboard" target="_blank" style="display: inline-block; padding: 14px 32px; color: #000000; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: 0.5px;">
+                                                <a href="https://e-crown-8duf.vercel.app/admin/dashboard" target="_blank" style="display: inline-block; padding: 14px 32px; color: #000000; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: 0.5px;">
                                                     Launch Command Dashboard
                                                 </a>
                                             </td>
