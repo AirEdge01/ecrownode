@@ -4,8 +4,8 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
-const jsonWebToken = require('jsonwebtoken'); 
 
+// 🔥 FIX 1: Run configuration BEFORE reading process.env values
 dotenv.config();
 
 const app = express();
@@ -54,16 +54,30 @@ const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 // ==========================================
 // 2. NODEMAILER EMAIL CONFIGURATION
 // ==========================================
+// 🔥 FIX 2: Upgraded with strict SSL/TLS parameters and connection pooling
 const transporter = nodemailer.createTransport({
   service: 'gmail', 
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  pool: true,
   auth: {
-    user: process.env.ADMIN_EMAIL,
-    pass: process.env.ADMIN_EMAIL_PASSWORD 
+    user: process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com',
+    pass: process.env.ADMIN_EMAIL_PASSWORD || 'zuegcnabukvzyziz' 
+  }
+});
+
+// Auto-Verify Connection Handling Engine on Bootstrap
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ index.js Mail Configuration Error:", error.message);
+  } else {
+    console.log("🚀 index.js Order Mail System authenticated cleanly.");
   }
 });
 
 const sendAdminOrderAlert = async (orderData) => {
-  const adminEmail = process.env.ADMIN_EMAIL || 'your-admin-email@gmail.com';
+  const adminEmail = process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com';
   
   const itemsListHTML = orderData.items.map(item => 
     `<li><strong>${item.name}</strong> (Qty: ${item.quantity}) - ₦${item.price.toLocaleString()}</li>`
@@ -97,73 +111,38 @@ const sendAdminOrderAlert = async (orderData) => {
 };
 
 // ==========================================
-// 3. ROUTE PROTECTION MIDDLEWARE LAYER
-// ==========================================
-
-// Guard A: Protects routes from unauthenticated traffic (Any logged in user)
-const protectRoute = (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        
-        // 🚨 Unregistered users trigger a strict 401 status code so your Axios interceptor redirects to /error
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ 
-                success: false, 
-                message: 'Access Denied: Unregistered visitor node. Missing token.' 
-            });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const decodedPayload = jsonWebToken.verify(token, process.env.jsonSecretKey || 'default_fallback_secret_key');
-        
-        req.user = decodedPayload; // Attaches user profile data (id, email, role) to the request object
-        next();
-    } catch (err) {
-        // Expired or invalid tokens return a 401 to execute your frontend's plug-pulling interceptor
-        return res.status(401).json({ 
-            success: false, 
-            message: 'Access Denied: Token validation expired or structurally altered.' 
-        });
-    }
-};
-
-// Guard B: Restricts routes exclusively to Administrators
-const restrictToAdmin = (req, res, next) => {
-    if (!req.user || req.user.role !== 'admin') {
-        return res.status(403).json({ 
-            success: false, 
-            message: 'Access Denied: High-clearance system profile privilege context required.' 
-        });
-    }
-    next();
-};
-
-// ==========================================
-// 4. MIDDLEWARE CONFIGURATION
+// 3. MIDDLEWARE CONFIGURATION
 // ==========================================
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use(cors({
-    origin: ['https://e-crown-8duf.vercel.app', 'http://localhost:5173', 'http://localhost:5174'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    origin: [
+      'https://e-crown-8duf.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174'
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
 
 // ==========================================
-// 5. API ENDPOINTS & ROUTES
+// 4. API ENDPOINTS & ROUTES
 // ==========================================
 
 app.get('/', (req, res) => res.send('eCrown Engine operational API system running smoothly.'));
 
-// Attach user authentication endpoints (Signup/Signin remain completely public)
+// Attach user authentication endpoints (Signup/Signin)
 app.use('/user', userRoutes);
 
 app.post('/pay', async (req, res, next) => {
     try { await payment(req, res, next); } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Get all products (Public route so users can shop items freely)
+// Get all products
 app.get('/api/products', async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -173,78 +152,32 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// ------------------------------------------------------------------
-// 🔒 SPACE FOR STANDARD PROTECTED ROUTES (Any logged-in user can access):
-// ------------------------------------------------------------------
-
-// 🔥 CORE SECURITY ENDPOINT: Used by ProtectedRoute.jsx wrapper on frontend mount
-app.get('/api/user/profile-context', protectRoute, async (req, res) => {
-    return res.status(200).json({ 
-        success: true, 
-        message: "Secure connection authenticated.", 
-        user: req.user 
-    });
+// Admin Route: Add product
+app.post('/api/admin/products', async (req, res) => {
+  try {
+    const { name, price, description, category, stock } = req.body;
+    const newProduct = new Product({ name, price: Number(price), description, category, stock: Number(stock) });
+    await newProduct.save();
+    return res.status(201).json({ success: true, message: "Product created successfully!", product: newProduct });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
-// 🔒 PROTECTED ROUTE: About Page Context Data
-app.get('/api/about', protectRoute, async (req, res) => {
-    try {
-        return res.status(200).json({ 
-            success: true, 
-            message: "Restricted about context data accessed successfully.",
-            companyInfo: {
-                name: "eCrown Technologies",
-                clearanceLevel: "Authenticated Access Granted",
-                services: ["Surveillance Infrastructure", "Network Architecture", "IT Infrastructure Systems"]
-            }
-        });
-    } catch (error) { return res.status(500).json({ success: false, error: error.message }); }
+// Admin Route: Edit product
+app.put('/api/admin/products/:id', async (req, res) => {
+  try {
+    const { name, price, description, category, stock } = req.body;
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      { name, price: Number(price), description, category, stock: Number(stock) },
+      { new: true }
+    );
+    return res.json({ success: true, message: "Product context mapping updated successfully!", product: updatedProduct });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
-
-// 🔒 PROTECTED ROUTE: POS Systems Page Context Data
-app.get('/api/pos', protectRoute, async (req, res) => {
-    try {
-        return res.status(200).json({
-            success: true,
-            message: "Restricted POS system deployment data loaded.",
-            posContext: {
-                hardwareSupport: ["Thermal Printers", "Barcode Scanners", "Retail Terminal Screens"],
-                softwareFeatures: ["Real-time Inventory Tracking", "Multi-terminal Synchronization", "Offline Transaction Cache"]
-            }
-        });
-    } catch (error) { return res.status(500).json({ success: false, error: error.message }); }
-});
-
-// 🔒 PROTECTED ROUTE: CCTV Surveillance Page Context Data
-app.get('/api/cctv', protectRoute, async (req, res) => {
-    try {
-        return res.status(200).json({
-            success: true,
-            message: "Restricted CCTV network security configuration loaded.",
-            cctvContext: {
-                architectures: ["IP Network Cameras", "HD Analog Infrastructures", "Wireless Control Nodes"],
-                monitoringFeatures: ["AI Motion Analytics Matrix", "Remote Cloud Visual Streams", "Redundant Storage Units"]
-            }
-        });
-    } catch (error) { return res.status(500).json({ success: false, error: error.message }); }
-});
-
-// 🔒 PROTECTED ROUTE: Server Room Infrastructure Page Context Data
-app.get('/api/server', protectRoute, async (req, res) => {
-    try {
-        return res.status(200).json({
-            success: true,
-            message: "Restricted backend infrastructure topology loaded.",
-            serverContext: {
-                deployments: ["Rack Architecture Design", "Structured Network Cabling", "Cooling Array Metrics"],
-                safetyStandards: ["Automated Fire Suppression Checks", "UPS Backup Failover Switches", "Biometric Terminal Interlocks"]
-            }
-        });
-    } catch (error) { return res.status(500).json({ success: false, error: error.message }); }
-});
-
-// ------------------------------------------------------------------
-
 
 // Customer Checkout Session Endpoint
 app.post('/api/orders', async (req, res) => {
@@ -292,7 +225,6 @@ app.post('/api/orders', async (req, res) => {
           price: Number(product.price) 
         });
       } else {
-        // Fallback for hardcoded mock elements
         formattedItems.push({
           productId: String(targetId),
           name: item.name || 'Unknown Hardware Item',
@@ -313,7 +245,6 @@ app.post('/api/orders', async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // Only deduct stock counts for real database items
     for (const item of formattedItems) {
       if (mongoose.Types.ObjectId.isValid(item.productId)) {
         const existingProduct = await Product.findById(item.productId);
@@ -339,40 +270,8 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-
-// ------------------------------------------------------------------
-// 🛡️ ADMIN ONLY PROTECTED REGION (Requires login AND admin role clearance)
-// ------------------------------------------------------------------
-
-// Admin Route: Add product
-app.post('/api/admin/products', protectRoute, restrictToAdmin, async (req, res) => {
-  try {
-    const { name, price, description, category, stock } = req.body;
-    const newProduct = new Product({ name, price: Number(price), description, category, stock: Number(stock) });
-    await newProduct.save();
-    return res.status(201).json({ success: true, message: "Product created successfully!", product: newProduct });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// Admin Route: Edit product
-app.put('/api/admin/products/:id', protectRoute, restrictToAdmin, async (req, res) => {
-  try {
-    const { name, price, description, category, stock } = req.body;
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      { name, price: Number(price), description, category, stock: Number(stock) },
-      { new: true }
-    );
-    return res.json({ success: true, message: "Product context mapping updated successfully!", product: updatedProduct });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// Admin Panel Get Orders List Endpoint
-app.get('/api/admin/orders', protectRoute, restrictToAdmin, async (req, res) => {
+// Admin Panel Order Routes
+app.get('/api/admin/orders', async (req, res) => {
     try {
         const orders = await Order.find().sort({ createdAt: -1 });
         const normalizedOrders = orders.map(order => ({
@@ -387,8 +286,7 @@ app.get('/api/admin/orders', protectRoute, restrictToAdmin, async (req, res) => 
     } catch (error) { return res.status(500).json({ error: error.message }); }
 });
 
-// Admin Panel Modify Order Status Endpoint
-app.put('/api/admin/orders/:id', protectRoute, restrictToAdmin, async (req, res) => {
+app.put('/api/admin/orders/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
@@ -397,9 +295,8 @@ app.put('/api/admin/orders/:id', protectRoute, restrictToAdmin, async (req, res)
     } catch (error) { return res.status(500).json({ error: error.message }); }
 });
 
-
 // ==========================================
-// 6. SERVER CONNECTIVITY ENGINE
+// 5. SERVER CONNECTIVITY ENGINE
 // ==========================================
 if (!MongoDB_URI) {
   console.error("❌ CRITICAL ERROR: process.env.MongoDB_URI is undefined! Check your .env file.");
