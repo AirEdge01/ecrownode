@@ -64,7 +64,7 @@ const sendUserWelcomeEmail = async (email, firstName, lastName) => {
                                     <p style="color: #475569; font-size: 15px; line-height: 1.6;">Thank you for signing up for our application. We are absolutely thrilled to have you on board with eCrown Tech! Your secure profile has been successfully generated.</p>
                                     <table cellspacing="0" cellpadding="0" style="margin: 28px 0;">
                                         <tr>
-                                            <td bgcolor="#0F172A" style="border-radius: 8px;"><a href="http://localhost:5174/dashboard" target="_blank" style="display: inline-block; padding: 14px 28px; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none;">Go to Dashboard</a></td>
+                                            <td bgcolor="#0F172A" style="border-radius: 8px;"><a href="https://e-crown-8duf.vercel.app/dashboard" target="_blank" style="display: inline-block; padding: 14px 28px; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none;">Go to Dashboard</a></td>
                                         </tr>
                                     </table>
                                     <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 25px 0;">
@@ -131,7 +131,7 @@ const sendAdminWelcomeEmail = async (email, firstName, lastName) => {
                                     <table cellspacing="0" cellpadding="0" style="margin: 28px 0;">
                                         <tr>
                                             <td bgcolor="#eab308" style="border-radius: 8px; text-align: center;">
-                                                <a href="https://localhost:5174/admin/dashboard" target="_blank" style="display: inline-block; padding: 14px 32px; color: #000000; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: 0.5px;">
+                                                <a href="https://e-crown-8duf.vercel.app/admin/dashboard" target="_blank" style="display: inline-block; padding: 14px 32px; color: #000000; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: 0.5px;">
                                                     Launch Command Dashboard
                                                 </a>
                                             </td>
@@ -213,18 +213,33 @@ const postSignUp = async (req, res) => {
         const savedUser = await newUser.save();
         console.log(`[Success] Account written to database with clearance: ${savedUser.role}`);
 
-        // Fast Async background transmission process
-        if (savedUser.role === 'admin') {
-            sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName)
-                .then(info => console.log("✉️ Background Admin Email Sent:", info.response))
-                .catch(err => console.error("❌ Background Admin Email Failure Trace:", err.message));
-        } else {
-            sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName)
-                .then(info => console.log("✉️ Background User Email Sent:", info.response))
-                .catch(err => console.error("❌ Background User Email Failure Trace:", err.message));
+        // 🔥 PRODUCTION FIX: Using Promise.all with explicit await forces live serverless routes 
+        // to fully complete data transfers before shutting down the instance.
+        try {
+            const currentAdminEmail = process.env.ADMIN_EMAIL || 'israeloye2019@gmail.com';
+            
+            if (savedUser.role === 'admin') {
+                // Admin user registration sends mail to the admin AND an alert copies into the control logs
+                await Promise.all([
+                    sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName),
+                    transporter.sendMail({
+                        from: `"eCrown Security" <${currentAdminEmail}>`,
+                        to: currentAdminEmail,
+                        subject: "🚨 SECURITY ALERT: New Admin Registration Logged",
+                        html: `<p>A new admin user has registered: <b>${savedUser.firstName} ${savedUser.lastName}</b> (${savedUser.email})</p>`
+                    })
+                ]);
+                console.log("👑 Double Admin dispatch completed smoothly.");
+            } else {
+                // Standard user route tracking path
+                await sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
+                console.log("✉️ User Registration dispatch completed smoothly.");
+            }
+        } catch (mailErr) {
+            console.error("❌ Production Delivery Stopped:", mailErr.message);
         }
 
-        // Returns status 201 immediately so loading speeds remain fast
+        // Returns status 201 cleanly after email actions complete or handle exceptions
         return res.status(201).json({ success: true, message: 'User registered successfully' });
 
     } catch (err) {
@@ -258,10 +273,13 @@ const postSignIn = async (req, res) => {
             { expiresIn: '1h' }
         );
         
-        // Fast Async background sign-in notification process
-        sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user')
-            .then(info => console.log("✉️ Background Sign-In Alert Sent:", info.response))
-            .catch(err => console.error("❌ Background Sign-In Email Failure Trace:", err.message));
+        // 🔥 PRODUCTION FIX: Force execution stack to resolve delivery records cleanly on live environments
+        try {
+            await sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
+            console.log("✉️ Log-In tracking verification confirmation logged.");
+        } catch (mailErr) {
+            console.error("❌ Production Login Notification Stopped:", mailErr.message);
+        }
 
         return res.status(200).json({ success: true, message: 'User logged in successfully', token });
 
