@@ -46,7 +46,7 @@
 
 //         // 2. Safely destructure now that Multer has unpacked the multipart boundary fields
 //         const { name, price, description, category, countInStock } = req.body;
-        
+
 //         if (!name) {
 //             return res.status(400).json({ success: false, message: "Missing required 'name' field property." });
 //         }
@@ -85,8 +85,6 @@ const multer = require('multer');
 const path = require('path');
 
 const userControllers = require('../controllers/user.controllers');
-console.log('CONTROLLER EXPORTS:', userControllers); // TEMP DEBUG — remove after we find the issue
-
 const { getSignUp, getSignIn, postSignUp, postSignIn } = userControllers;
 
 const router = express.Router();
@@ -114,6 +112,12 @@ router.post('/signup', postSignUp);
 router.get('/signin', getSignIn);
 router.post('/signin', postSignIn);
 
+// Compatibility routes for React frontend clients
+router.get('/register', getSignUp);
+router.post('/register', postSignUp);
+router.get('/login', getSignIn);
+router.post('/login', postSignIn);
+
 // ==========================================
 // 🔨 FIXED ADMIN PRODUCT INGESTION ROUTE
 // ==========================================
@@ -132,7 +136,7 @@ router.post('/admin/products', upload.single('image'), async (req, res) => {
 
         // 2. Safely destructure now that Multer has unpacked the multipart boundary fields
         const { name, price, description, category, countInStock } = req.body;
-        
+
         if (!name) {
             return res.status(400).json({ success: false, message: "Missing required 'name' field property." });
         }
@@ -142,11 +146,11 @@ router.post('/admin/products', upload.single('image'), async (req, res) => {
         }
 
         // Clean file system slash directions for cross-browser web addresses
-        const imagePath = req.file.path.replace(/\\/g, '/'); 
+        const imagePath = req.file.path.replace(/\\/g, '/');
 
         // If you haven't linked your Mongoose model back yet, we return a structural success response:
-        return res.status(201).json({ 
-            success: true, 
+        return res.status(201).json({
+            success: true,
             message: "🎉 Success! Multer intercepted form and saved asset image.",
             productData: {
                 name,

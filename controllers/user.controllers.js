@@ -20,16 +20,20 @@ const getSignUp = (req, res) => {
 
 const postSignUp = async (req, res) => {
     try {
-        const { firstName, lastName, email, password, role } = req.body;
-        const normalizedEmail = String(email).toLowerCase();
+        const firstName = String(req.body.firstName || req.body.firstname || req.body.first_name || '').trim();
+        const lastName = String(req.body.lastName || req.body.lastname || req.body.last_name || '').trim();
+        const email = String(req.body.email || '').trim();
+        const password = String(req.body.password || '');
+        const role = req.body.role || req.body.userRole;
+        const normalizedEmail = email.toLowerCase();
 
         const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-        const hashedPassword = await bcrypt.hash(String(password), saltRounds);
-        const assignedRole = (role && role.toLowerCase() === 'admin') ? 'admin' : 'user';
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        const assignedRole = (role && String(role).toLowerCase() === 'admin') ? 'admin' : 'user';
 
         const newUser = new User({
             firstName,
@@ -68,8 +72,9 @@ const getSignIn = (req, res) => {
 
 const postSignIn = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        const normalizedEmail = String(email).toLowerCase();
+        const email = String(req.body.email || '').trim();
+        const password = String(req.body.password || '');
+        const normalizedEmail = email.toLowerCase();
 
         const user = await User.findOne({ email: normalizedEmail });
         if (!user) {

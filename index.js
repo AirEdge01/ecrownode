@@ -320,6 +320,7 @@ app.use(cors({
 app.get('/', (req, res) => res.send('eCrown Engine operational API system running smoothly.'));
 
 // Attach user authentication endpoints (Signup/Signin)
+app.use('/', userRoutes);
 app.use('/user', userRoutes);
 
 app.post('/pay', async (req, res, next) => {
