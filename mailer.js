@@ -71,7 +71,7 @@ const sendUserWelcomeEmail = async (email, firstName, lastName) => {
     const mailOptions = {
         from: `"eCrown Tech" <${smtpUser || 'no-reply@example.com'}>`,
         to: recipient,
-        subject: '🚀 Welcome to eCrown Tech!',
+        subject: ' Welcome to eCrown Tech!',
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 10px;">
         <h2 style="color: #111827;">Welcome to eCrown Tech!</h2>
