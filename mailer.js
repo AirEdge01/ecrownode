@@ -43,8 +43,19 @@ const sendMail = async (mailOptions) => {
         throw new Error('Mail credentials are not configured.');
     }
 
+    const normalizedMailOptions = {
+        ...mailOptions,
+        from: mailOptions.from || `"eCrown Tech" <${smtpUser}>`,
+        replyTo: mailOptions.replyTo || smtpUser,
+        headers: {
+            ...(mailOptions.headers || {}),
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal'
+        }
+    };
+
     try {
-        return await transporter.sendMail(mailOptions);
+        return await transporter.sendMail(normalizedMailOptions);
     } catch (error) {
         console.error('❌ Mail send failed:', error.message);
         throw error;
@@ -52,9 +63,14 @@ const sendMail = async (mailOptions) => {
 };
 
 const sendUserWelcomeEmail = async (email, firstName, lastName) => {
+    const recipient = String(email || '').trim();
+    if (!recipient) {
+        throw new Error('Recipient email is required.');
+    }
+
     const mailOptions = {
         from: `"eCrown Tech" <${smtpUser || 'no-reply@example.com'}>`,
-        to: email,
+        to: recipient,
         subject: '🚀 Welcome to eCrown Tech!',
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 10px;">
@@ -70,9 +86,14 @@ const sendUserWelcomeEmail = async (email, firstName, lastName) => {
 };
 
 const sendAdminWelcomeEmail = async (email, firstName, lastName) => {
+    const recipient = String(email || '').trim();
+    if (!recipient) {
+        throw new Error('Recipient email is required.');
+    }
+
     const mailOptions = {
         from: `"eCrown Admin" <${smtpUser || 'no-reply@example.com'}>`,
-        to: email,
+        to: recipient,
         subject: '🛡️ Admin account created',
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 10px;">
@@ -87,9 +108,14 @@ const sendAdminWelcomeEmail = async (email, firstName, lastName) => {
 };
 
 const sendSigninNotificationEmail = async (email, firstName, lastName, role = 'user') => {
+    const recipient = String(email || '').trim();
+    if (!recipient) {
+        throw new Error('Recipient email is required.');
+    }
+
     const mailOptions = {
         from: `"eCrown System" <${smtpUser || 'no-reply@example.com'}>`,
-        to: email,
+        to: recipient,
         subject: '🔐 New sign-in detected',
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 10px;">
@@ -106,7 +132,7 @@ const sendSigninNotificationEmail = async (email, firstName, lastName, role = 'u
 };
 
 const sendAdminOrderAlert = async (orderData) => {
-    const adminEmail = process.env.ADMIN_EMAIL || 'your-admin-email@gmail.com';
+    const adminEmail = String(process.env.ADMIN_EMAIL || process.env.SMTP_USER || 'your-admin-email@gmail.com').trim();
     const itemsListHTML = (orderData.items || []).map(item =>
         `<li><strong>${item.name}</strong> (Qty: ${item.quantity}) - ₦${Number(item.price || 0).toLocaleString()}</li>`
     ).join('');
