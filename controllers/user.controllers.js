@@ -10,22 +10,49 @@ const {
     sendSigninNotificationEmail
 } = require('../mailer');
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const extractNameParts = (body = {}) => {
+    const rawFirstName = String(body.firstName || body.firstname || body.first_name || body.fname || body.name || body.fullName || body.fullname || '').trim();
+    const rawLastName = String(body.lastName || body.lastname || body.last_name || body.lname || body.surname || '').trim();
+
+    if (rawFirstName && rawLastName) {
+        return { firstName: rawFirstName, lastName: rawLastName };
+    }
+
+    if (rawFirstName) {
+        const parts = rawFirstName.split(/\s+/);
+        return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' };
+    }
+
+    return { firstName: '', lastName: '' };
+};
+
+const getAssignedRole = (body = {}) => {
+    const role = body.role || body.userRole || body.user_role || '';
+    return role && String(role).toLowerCase() === 'admin' ? 'admin' : 'user';
+};
+
 // ==========================================
 // CONTROLLER ROUTE INTERFACES
 // ==========================================
 
 const getSignUp = (req, res) => {
-    res.render('signup', { title: 'Sign Up' });
+    res.render('signUp', { title: 'Sign Up' });
 };
 
 const postSignUp = async (req, res) => {
     try {
-        const firstName = String(req.body.firstName || req.body.firstname || req.body.first_name || '').trim();
-        const lastName = String(req.body.lastName || req.body.lastname || req.body.last_name || '').trim();
-        const email = String(req.body.email || '').trim();
+        const { firstName, lastName } = extractNameParts(req.body);
+        const email = normalizeEmail(req.body.email || req.body.userEmail || req.body.emailAddress || '');
         const password = String(req.body.password || '');
-        const role = req.body.role || req.body.userRole;
         const normalizedEmail = email.toLowerCase();
+
+        if (!emailRegex.test(normalizedEmail)) {
+            return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
+        }
 
         const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
@@ -33,7 +60,7 @@ const postSignUp = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, saltRounds);
-        const assignedRole = (role && String(role).toLowerCase() === 'admin') ? 'admin' : 'user';
+        const assignedRole = getAssignedRole(req.body);
 
         const newUser = new User({
             firstName,
@@ -46,18 +73,18 @@ const postSignUp = async (req, res) => {
         const savedUser = await newUser.save();
         console.log(`[Success] Account written to database with clearance: ${savedUser.role}`);
 
-        // Fast Async background transmission process
-        if (savedUser.role === 'admin') {
-            sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName)
-                .then(info => console.log("✉️ Background Admin Email Sent:", info.response))
-                .catch(err => console.error("❌ Background Admin Email Failure Trace:", err.message));
-        } else {
-            sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName)
-                .then(info => console.log("✉️ Background User Email Sent:", info.response))
-                .catch(err => console.error("❌ Background User Email Failure Trace:", err.message));
+        try {
+            if (savedUser.role === 'admin') {
+                await sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
+                console.log('✉️ Admin welcome email sent successfully.');
+            } else {
+                await sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
+                console.log('✉️ Welcome email sent successfully.');
+            }
+        } catch (mailError) {
+            console.error('❌ Welcome email failure:', mailError.message);
         }
 
-        // Returns status 201 immediately so loading speeds remain fast
         return res.status(201).json({ success: true, message: 'User registered successfully' });
 
     } catch (err) {
@@ -67,16 +94,19 @@ const postSignUp = async (req, res) => {
 };
 
 const getSignIn = (req, res) => {
-    res.render('signin', { title: 'Sign In' });
+    res.render('signIn', { title: 'Sign In' });
 };
 
 const postSignIn = async (req, res) => {
     try {
-        const email = String(req.body.email || '').trim();
+        const email = normalizeEmail(req.body.email || req.body.userEmail || req.body.emailAddress || '');
         const password = String(req.body.password || '');
-        const normalizedEmail = email.toLowerCase();
 
-        const user = await User.findOne({ email: normalizedEmail });
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
+        }
+
+        const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({ success: false, message: 'Invalid email or password' });
         }
@@ -92,10 +122,12 @@ const postSignIn = async (req, res) => {
             { expiresIn: '1h' }
         );
 
-        // Fast Async background sign-in notification process
-        sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user')
-            .then(info => console.log("✉️ Background Sign-In Alert Sent:", info.response))
-            .catch(err => console.error("❌ Background Sign-In Email Failure Trace:", err.message));
+        try {
+            await sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
+            console.log('✉️ Sign-in notification email sent successfully.');
+        } catch (mailError) {
+            console.error('❌ Sign-in email failure:', mailError.message);
+        }
 
         return res.status(200).json({ success: true, message: 'User logged in successfully', token });
 
