@@ -1,146 +1,118 @@
 const bcrypt = require('bcrypt');
-const jsonWebToken = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const saltRounds = 10;
+const User = require('../models/use.models');
+// const { json } = require('express');
+const  jsonWebToken =require ('jsonwebtoken')
 
-// Import user model once globally at the top
-const User = require('../models/user.models');
-const {
-    sendUserWelcomeEmail,
-    sendAdminWelcomeEmail,
-    sendSigninNotificationEmail
-} = require('../mailer');
+const getSignup = (req, res) => {
+    res.render('signup', { title: 'Sign Up' });
+}
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const postSignup = (req, res) => {
+    const { firstName, lastName, email, password } = req.body;
 
-const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
-
-const extractNameParts = (body = {}) => {
-    const rawFirstName = String(body.firstName || body.firstname || body.first_name || body.fname || body.name || body.fullName || body.fullname || '').trim();
-    const rawLastName = String(body.lastName || body.lastname || body.last_name || body.lname || body.surname || '').trim();
-
-    if (rawFirstName && rawLastName) {
-        return { firstName: rawFirstName, lastName: rawLastName };
-    }
-
-    if (rawFirstName) {
-        const parts = rawFirstName.split(/\s+/);
-        return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' };
-    }
-
-    return { firstName: '', lastName: '' };
-};
-
-const getAssignedRole = (body = {}) => {
-    const role = body.role || body.userRole || body.user_role || '';
-    return role && String(role).toLowerCase() === 'admin' ? 'admin' : 'user';
-};
-
-// ==========================================
-// CONTROLLER ROUTE INTERFACES
-// ==========================================
-
-const getSignUp = (req, res) => {
-    res.render('signUp', { title: 'Sign Up' });
-};
-
-const postSignUp = async (req, res) => {
-    try {
-        const { firstName, lastName } = extractNameParts(req.body);
-        const email = normalizeEmail(req.body.email || req.body.userEmail || req.body.emailAddress || '');
-        const password = String(req.body.password || '');
-        const normalizedEmail = email.toLowerCase();
-
-        if (!emailRegex.test(normalizedEmail)) {
-            return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
-        }
-
-        const existingUser = await User.findOne({ email: normalizedEmail });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: 'Email already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-        const assignedRole = getAssignedRole(req.body);
-
-        const newUser = new User({
-            firstName,
-            lastName,
-            email: normalizedEmail,
-            password: hashedPassword,
-            role: assignedRole
-        });
-
-        const savedUser = await newUser.save();
-        console.log(`[Success] Account written to database with clearance: ${savedUser.role}`);
-
-        try {
-            if (savedUser.role === 'admin') {
-                await sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-                console.log('✉️ Admin welcome email sent successfully.');
-            } else {
-                await sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-                console.log('✉️ Welcome email sent successfully.');
+    User.findOne({ email })
+            .then((existingUser) => {
+            if (existingUser) {
+                res.status(400).send('Email already exists');
+                return Promise.reject('user already exists');
             }
-        } catch (mailError) {
-            console.error('❌ Welcome email failure:', mailError.message);
-        }
 
-        return res.status(201).json({ success: true, message: 'User registered successfully' });
+            // ✅ Ensure password is a valid string before hashing
+            const saltRounds = 10;
+            return bcrypt.hash(String(password), saltRounds);
+        })
+        .then((hashedPassword) => {
+            if (!hashedPassword) return;
+            const newUser = new User({
+                firstName,
+                lastName,
+                email,
+                password: hashedPassword,
+            });
+            return newUser.save();
+        })
+        .then((savedUser) => {
+            if (!savedUser) return;
+            console.log('User registered successfully');
 
-    } catch (err) {
-        console.error("❌ SIGNUP CONTROLLER CRASH:", err.message);
-        return res.status(500).json({ success: false, message: "Database tracking failure: " + err.message });
-    }
-};
+            let transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: 'israeloye2019@gmail.com',
+                    pass: 'zuegcnabukvzyziz'
+                }
+            });
 
-const getSignIn = (req, res) => {
-    res.render('signIn', { title: 'Sign In' });
-};
+            let mailOptions = {
+                from: 'israeloye2019@gmail.com',
+                to: req.body.email,
+                subject: 'Welcome to our Application',
+                html: `
+                <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <h1 style="color: #4CAF50;">Welcome to AirEdge Mobile BankApp!</h1>
+                    <p>Hi <strong>${firstName} ${lastName}</strong>,</p>
+                    <p>Thank you for signing up for our application. We are thrilled to have you on board!</p>
+                    <p>Here are some quick links to get you started:</p>
+        
+                    <p>If you have any questions, feel free to reply to this email. We're here to help!</p>
+                    <p>Best regards,</p>
+                    <p>The Light Tracker Team</p>
+                    <footer style="margin-top: 20px; font-size: 12px; color: #777;">
+                        <p>You are receiving this email because you signed up for Light Tracker.</p>
+                        <p>&copy; 2025 Light Tracker. All rights reserved.</p>
+                    </footer>
+                </div>
+                `
+            };
 
-const postSignIn = async (req, res) => {
+            transporter.sendMail(mailOptions, function (error, info) {
+                if (error) {
+                    console.log(error);
+                } else {
+                    console.log('Email sent:' + info.response);
+                }
+            });
+
+            res.status(201).json('user successful')
+        })
+        .catch((err) => {
+            if (err !== 'user already exists') {
+                console.log('Error saving user:', err);
+                res.status(500).send('Internal server error');
+            }
+        });
+}
+
+const getSigningin = (req, res) => {
+    res.render('signin', { title: 'Sign In' });
+   
+}
+
+const postSigningin= async (req, res) => {
+    const { email, password } = req.body;
+
     try {
-        const email = normalizeEmail(req.body.email || req.body.userEmail || req.body.emailAddress || '');
-        const password = String(req.body.password || '');
-
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
-        }
-
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ success: false, message: 'Invalid email or password' });
+            return res.status(400).send('Invalid email or password');
         }
 
         const match = await bcrypt.compare(password, user.password);
         if (!match) {
-            return res.status(400).json({ success: false, message: 'Invalid email or password' });
+            return res.status(400).send('Invalid email or password');
         }
 
-        const token = jsonWebToken.sign(
-            { id: user._id, email: user.email, role: user.role || 'user' },
-            process.env.jsonSecretKey || 'default_fallback_secret_key',
-            { expiresIn: '1h' }
-        );
-
-        try {
-            await sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
-            console.log('✉️ Sign-in notification email sent successfully.');
-        } catch (mailError) {
-            console.error('❌ Sign-in email failure:', mailError.message);
-        }
-
-        return res.status(200).json({ success: true, message: 'User logged in successfully', token });
-
+        const token = jsonWebToken.sign({id:user.id, email:user.email}, process.env.jsonSecretKey, {expiresIn: '1h'})
+        // console.log(token);
+        res.status(200 || 200).json({success:true, message: 'user logged in', token})
+        
+        res.status(201).json({success: true, message:'successful'})
     } catch (err) {
         console.error('Login error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
+        res.status(500).send('Internal server error');  
     }
-};
+}
 
-module.exports = {
-    postSignUp,
-    getSignUp,
-    postSignIn,
-    getSignIn
-};
-
+module.exports={postSignup,getSignup,postSigningin ,getSigningin}
