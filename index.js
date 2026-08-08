@@ -243,7 +243,7 @@
 const express = require('express');
 const app = express();
 const mongoose = require('mongoose');
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 2000;
 const dotenv = require('dotenv');
 dotenv.config();
 const bcrypt = require('bcrypt');
