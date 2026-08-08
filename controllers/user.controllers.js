@@ -1,189 +1,144 @@
 const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
 const jsonWebToken = require('jsonwebtoken');
+
+// Model import
+const User = require('../models/user.models'); 
+
 const saltRounds = 10;
 
-const User = require('../models/user.models');
-const {
-    sendUserWelcomeEmail,
-    sendAdminWelcomeEmail,
-    sendSigninNotificationEmail
-} = require('../mailer');
-
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
-
-// Accepts whatever field names the frontend actually sends
-const extractNameParts = (body = {}) => {
-    const rawFirstName = String(
-        body.firstName || body.firstname || body.first_name || body.fname ||
-        body.name || body.fullName || body.fullname || ''
-    ).trim();
-    const rawLastName = String(
-        body.lastName || body.lastname || body.last_name || body.lname || body.surname || ''
-    ).trim();
-
-    if (rawFirstName && rawLastName) {
-        return { firstName: rawFirstName, lastName: rawLastName };
+// Reusable Nodemailer Transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.GMAIL_USER || 'israeloye2019@gmail.com',
+        pass: process.env.GOOGLE_APP_PASSWORD || process.env.GMAIL_PASS || 'zuegcnabukvzyziz'
     }
+});
 
-    if (rawFirstName) {
-        const parts = rawFirstName.split(/\s+/);
-        return {
-            firstName: parts[0] || '',
-            // Fallback so lastName is never empty if only a full name was sent
-            lastName: parts.slice(1).join(' ') || parts[0] || ''
-        };
-    }
-
-    return { firstName: '', lastName: '' };
-};
-
-const getAssignedRole = (body = {}) => {
-    const role = body.role || body.userRole || body.user_role || '';
-    return role && String(role).toLowerCase() === 'admin' ? 'admin' : 'user';
+const getSignup = (req, res) => {
+    res.render('signup', { title: 'Sign Up' });
 };
 
 // ==========================================
-// CONTROLLER ROUTE INTERFACES
+// 1. SIGNUP CONTROLLER (Sends Welcome Email)
 // ==========================================
+const postSignup = async (req, res) => {
+    const { firstName, lastName, email, password } = req.body;
 
-const getSignUp = (req, res) => {
-    res.render('signUp', { title: 'Sign Up' });
-};
-
-const postSignUp = async (req, res) => {
     try {
-        const { firstName, lastName } = extractNameParts(req.body);
-        const email = normalizeEmail(req.body.email || req.body.userEmail || req.body.emailAddress || '');
-        const password = String(req.body.password || '');
-
-        // Validate BEFORE hitting the database, with a clear reason for each failure
-        if (!firstName || !lastName) {
-            return res.status(400).json({
-                success: false,
-                message: 'First name and last name are required',
-                received: req.body // TEMP: helps you see exactly what the frontend sent — remove once confirmed working
-            });
-        }
-
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
-        }
-
-        if (!password || password.length < 6) {
-            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
-        }
-
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-        const assignedRole = getAssignedRole(req.body);
+        const hashedPassword = await bcrypt.hash(String(password), saltRounds);
 
         const newUser = new User({
             firstName,
             lastName,
             email,
             password: hashedPassword,
-            role: assignedRole
         });
 
-        let savedUser;
-        try {
-            savedUser = await newUser.save();
-        } catch (dbErr) {
-            // Handle Mongoose validation errors and duplicate-key races explicitly
-            if (dbErr.code === 11000) {
-                return res.status(400).json({ success: false, message: 'Email already exists' });
-            }
-            if (dbErr.name === 'ValidationError') {
-                const details = Object.values(dbErr.errors).map(e => e.message).join('; ');
-                console.error("❌ VALIDATION ERROR:", details);
-                return res.status(400).json({ success: false, message: details });
-            }
-            throw dbErr; // anything else falls through to the outer catch
-        }
+        const savedUser = await newUser.save();
 
-        console.log(`[Success] Account written to database with clearance: ${savedUser.role}`);
+        // Dispatch Welcome Email
+        const mailOptions = {
+            from: '"AirEdge Mobile Bank" <israeloye2019@gmail.com>',
+            to: email,
+            subject: '🚀 Welcome to AirEdge Mobile BankApp!',
+            html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                <h1 style="color: #4CAF50;">Welcome to AirEdge, ${firstName}!</h1>
+                <p>Thank you for signing up for our application. We are thrilled to have you on board!</p>
+                <p>If you have any questions, feel free to reply directly to this email.</p>
+                <br />
+                <p>Best regards,</p>
+                <p><strong>The AirEdge Support Team</strong></p>
+            </div>
+            `
+        };
 
-        // Email failures never block the signup response
-        try {
-            if (savedUser.role === 'admin') {
-                await sendAdminWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-                console.log('✉️ Admin welcome email sent successfully.');
-            } else {
-                await sendUserWelcomeEmail(savedUser.email, savedUser.firstName, savedUser.lastName);
-                console.log('✉️ Welcome email sent successfully.');
-            }
-        } catch (mailError) {
-            console.error('❌ Welcome email failure:', mailError.message);
-        }
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) console.error('❌ Welcome email error:', error.message);
+            else console.log('✉️ Welcome email sent:', info.response);
+        });
 
-        return res.status(201).json({ success: true, message: 'User registered successfully' });
+        return res.status(201).json({
+            success: true,
+            message: 'User registered successfully! Welcome email sent.',
+            user: { id: savedUser._id, firstName, lastName, email }
+        });
 
     } catch (err) {
-        console.error("❌ SIGNUP CONTROLLER CRASH:", err); // full error object, not just .message
-        return res.status(500).json({
-            success: false,
-            message: "Server error during signup: " + err.message
-        });
+        console.error('Signup error:', err);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
     }
 };
 
-const getSignIn = (req, res) => {
-    res.render('signIn', { title: 'Sign In' });
+const getSigningin = (req, res) => {
+    res.render('signin', { title: 'Sign In' });
 };
 
-const postSignIn = async (req, res) => {
+// ==========================================
+// 2. SIGNIN CONTROLLER (Sends Security Alert Email)
+// ==========================================
+const postSigningin = async (req, res) => {
+    const { email, password } = req.body;
+
     try {
-        const email = normalizeEmail(req.body.email || req.body.userEmail || req.body.emailAddress || '');
-        const password = String(req.body.password || '');
-
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
-        }
-
-        if (!password) {
-            return res.status(400).json({ success: false, message: 'Password is required' });
-        }
-
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({ success: false, message: 'Invalid email or password' });
         }
 
-        const match = await bcrypt.compare(password, user.password);
+        const match = await bcrypt.compare(String(password), user.password);
         if (!match) {
             return res.status(400).json({ success: false, message: 'Invalid email or password' });
         }
 
+        const secretKey = process.env.jsonSecretKey || 'defaultSecretKey';
         const token = jsonWebToken.sign(
-            { id: user._id, email: user.email, role: user.role || 'user' },
-            process.env.jsonSecretKey || 'default_fallback_secret_key',
+            { id: user._id, email: user.email }, 
+            secretKey, 
             { expiresIn: '1h' }
         );
 
-        try {
-            await sendSigninNotificationEmail(user.email, user.firstName, user.lastName, user.role || 'user');
-            console.log('✉️ Sign-in notification email sent successfully.');
-        } catch (mailError) {
-            console.error('❌ Sign-in email failure:', mailError.message);
-        }
+        // Dispatch Sign-in Alert Email
+        const mailOptions = {
+            from: '"AirEdge Mobile Bank" <israeloye2019@gmail.com>',
+            to: user.email,
+            subject: '🔐 Security Alert: Account Sign-In Detected',
+            html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                <h2 style="color: #1f2937;">Hello ${user.firstName || 'User'},</h2>
+                <p>A successful sign-in to your AirEdge account was detected.</p>
+                <ul>
+                    <li><strong>Account Email:</strong> ${user.email}</li>
+                    <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
+                </ul>
+                <p>If this was you, no action is needed.</p>
+                <p style="color: #dc2626; font-weight: bold;">If you did not log in, please reset your password immediately.</p>
+            </div>
+            `
+        };
 
-        return res.status(200).json({ success: true, message: 'User logged in successfully', token });
+        transporter.sendMail(mailOptions, (err, info) => {
+            if (err) console.error("❌ Sign-in alert error:", err.message);
+            else console.log("✉️ Sign-in alert email sent:", info.response);
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'User logged in successfully! Security alert email sent.',
+            token
+        });
 
     } catch (err) {
-        console.error('❌ LOGIN CONTROLLER CRASH:', err);
-        return res.status(500).json({ success: false, message: 'Server error during login: ' + err.message });
+        console.error('Login error:', err);
+        return res.status(500).json({ success: false, message: 'Internal server error' });  
     }
 };
 
-module.exports = {
-    postSignUp,
-    getSignUp,
-    postSignIn,
-    getSignIn
-};
+module.exports = { postSignup, getSignup, postSigningin, getSigningin };
